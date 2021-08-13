@@ -10,13 +10,20 @@ pub mod renderable_colored_shape;
 pub mod texture;
 pub mod gl_buffers;
 pub mod sprite;
+pub mod chess_square;
+pub mod chess_board;
+
+use chess_square::{ChessSquare};
+use std::collections::{HashMap};
 
 fn main() {
   print!("{}", std::env::current_dir().unwrap().display());
     let sdl = sdl2::init().unwrap();
     let video_subsystem = sdl.video().unwrap();
-
     let gl_attr = video_subsystem.gl_attr();
+    
+    gl_attr.set_multisample_buffers(1);
+    gl_attr.set_multisample_samples(4);
 
     gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
     gl_attr.set_context_version(4, 1);
@@ -73,12 +80,29 @@ fn main() {
   let black_square = renderable_colored_shape::create(colored_shape::square(1.0, &black), &gl);
   let white_square = renderable_colored_shape::create(colored_shape::square(1.0, &white), &gl);
 
-  let black_bishop_sprite = sprite::create_sprite("./imagery/chess_pieces/black_bishop.png", 70.0 * 3.0, &gl);
-  let black_king_sprite = sprite::create_sprite("./imagery/chess_pieces/black_king.png", 70.0 * 3.0, &gl);
+  let pixels_per_unit = 240.0;
+
+  let mut sprites : HashMap<ChessSquare, sprite::Sprite> = HashMap::new();
+  sprites.insert(ChessSquare::WhitePawn, sprite::create_sprite("./imagery/chess_pieces/white_pawn.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteBishop, sprite::create_sprite("./imagery/chess_pieces/white_bishop.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteKing, sprite::create_sprite("./imagery/chess_pieces/white_king.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteKnight, sprite::create_sprite("./imagery/chess_pieces/white_knight.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteQueen, sprite::create_sprite("./imagery/chess_pieces/white_queen.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteRook, sprite::create_sprite("./imagery/chess_pieces/white_rook.png", pixels_per_unit, &gl));
+  
+  sprites.insert(ChessSquare::BlackPawn, sprite::create_sprite("./imagery/chess_pieces/black_pawn.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackBishop, sprite::create_sprite("./imagery/chess_pieces/black_bishop.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackKing, sprite::create_sprite("./imagery/chess_pieces/black_king.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackKnight, sprite::create_sprite("./imagery/chess_pieces/black_knight.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackQueen, sprite::create_sprite("./imagery/chess_pieces/black_queen.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackRook, sprite::create_sprite("./imagery/chess_pieces/black_rook.png", pixels_per_unit, &gl));
+
+  let chess_board = chess_board::create_new_board();
 
   unsafe {
       gl.Viewport(0, 0, 900, 700);
       gl.ClearColor(0.3, 0.3, 0.5, 1.0);
+      gl.Enable(gl::MULTISAMPLE);
   }
 
     let mvp_str = CString::new("mvp").unwrap();
@@ -137,26 +161,22 @@ fn main() {
             }
           }
 
-          img_shader_program.set_used();
-          gl.ActiveTexture(gl::TEXTURE0 + 0);
-          gl.BindTexture(gl::TEXTURE_2D, black_bishop_sprite.tex.id);
-          gl.Uniform1i(gl.GetUniformLocation(img_shader_program.id, tex_str.as_ptr()), 0);
-          gl.BindVertexArray(black_bishop_sprite.vao);
-          let translation_matrix = mat4::translation(-1.5, 3.5, 0.0);
-          let m = mat4::col_mul(projection, translation_matrix);
-          gl.UniformMatrix4fv(gl.GetUniformLocation(img_shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, m.as_ptr());
-          gl.DrawArrays(gl::TRIANGLES, 0, 6);
-          gl.BindBuffer(gl::ARRAY_BUFFER, 0);
-          
-          gl.ActiveTexture(gl::TEXTURE0 + 0);
-          gl.BindTexture(gl::TEXTURE_2D, black_king_sprite.tex.id);
-          gl.Uniform1i(gl.GetUniformLocation(img_shader_program.id, tex_str.as_ptr()), 0);
-          gl.BindVertexArray(black_king_sprite.vao);
-          let translation_matrix = mat4::translation(-0.5, 3.5, 0.0);
-          let m = mat4::col_mul(projection, translation_matrix);
-          gl.UniformMatrix4fv(gl.GetUniformLocation(img_shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, m.as_ptr());
-          gl.DrawArrays(gl::TRIANGLES, 0, 6);
-          gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+          for y in 0..8 {
+            for x in 0..8 {
+              if chess_board.squares[y][x] != ChessSquare::Empty {
+                img_shader_program.set_used();
+                gl.ActiveTexture(gl::TEXTURE0 + 0);
+                gl.BindTexture(gl::TEXTURE_2D, sprites.get(&chess_board.squares[y][x]).unwrap().tex.id);
+                gl.Uniform1i(gl.GetUniformLocation(img_shader_program.id, tex_str.as_ptr()), 0);
+                gl.BindVertexArray(sprites.get(&chess_board.squares[y][x]).unwrap().vao);
+                let translation_matrix = mat4::translation(-3.5 + x as f32, -3.5 + y as f32, 0.0);
+                let m = mat4::col_mul(projection, translation_matrix);
+                gl.UniformMatrix4fv(gl.GetUniformLocation(img_shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, m.as_ptr());
+                gl.DrawArrays(gl::TRIANGLES, 0, 6);
+                gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+              }
+            }
+          }
 
             
           shader_program.set_used();
