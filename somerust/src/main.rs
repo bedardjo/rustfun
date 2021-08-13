@@ -8,6 +8,8 @@ pub mod vec3;
 pub mod colored_shape;
 pub mod renderable_colored_shape;
 pub mod texture;
+pub mod gl_buffers;
+pub mod sprite;
 
 fn main() {
   print!("{}", std::env::current_dir().unwrap().display());
@@ -65,22 +67,22 @@ fn main() {
     let img_shader_program =
         render_gl::Program::from_shaders(&gl, &[img_vert_shader, img_frag_shader]).unwrap();
 
-  let black : vec3::Vec3 = [0.0, 0.0, 0.0];
+  let black : vec3::Vec3 = [0.0, 0.7, 0.0];
   let white : vec3::Vec3 = [1.0, 1.0, 1.0];
   let renderable_colored_shape = renderable_colored_shape::create(colored_shape::equilateral_triangle(0.2), &gl);
   let black_square = renderable_colored_shape::create(colored_shape::square(1.0, &black), &gl);
   let white_square = renderable_colored_shape::create(colored_shape::square(1.0, &white), &gl);
 
-  let black_bishop_tex = texture::create_texture("./imagery/chess_pieces/black_bishop.png", &gl);
+  let black_bishop_sprite = sprite::create_sprite("./imagery/chess_pieces/black_bishop.png", 70.0 * 3.0, &gl);
+  let black_king_sprite = sprite::create_sprite("./imagery/chess_pieces/black_king.png", 70.0 * 3.0, &gl);
 
-    unsafe {
-        gl.Viewport(0, 0, 900, 700);
-        gl.ClearColor(0.3, 0.3, 0.5, 1.0);
-    }
-
-    // main loop
+  unsafe {
+      gl.Viewport(0, 0, 900, 700);
+      gl.ClearColor(0.3, 0.3, 0.5, 1.0);
+  }
 
     let mvp_str = CString::new("mvp").unwrap();
+    let tex_str = CString::new("tex").unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
     'main: loop {
         for event in event_pump.poll_iter() {
@@ -101,6 +103,9 @@ fn main() {
                         }
                         sdl2::keyboard::Keycode::D => {
                           x_translation += 0.5;
+                        }
+                        sdl2::keyboard::Keycode::Escape => {
+                          break 'main;
                         }
                         _ => {}
                       }
@@ -131,21 +136,39 @@ fn main() {
               }
             }
           }
-            
-            let translation_matrix = mat4::translation(x_translation, y_translation, 0.0);
-            let mvp = mat4::col_mul(projection, translation_matrix);
 
-            gl.BindVertexArray(renderable_colored_shape.vao);
-            gl.UniformMatrix4fv(gl.GetUniformLocation(shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, mvp.as_ptr());
-            gl.DrawArrays(
-                gl::TRIANGLES, // mode
-                0,             // starting index in the enabled arrays
-                6,             // number of indices to be rendered
-            );
+          img_shader_program.set_used();
+          gl.ActiveTexture(gl::TEXTURE0 + 0);
+          gl.BindTexture(gl::TEXTURE_2D, black_bishop_sprite.tex.id);
+          gl.Uniform1i(gl.GetUniformLocation(img_shader_program.id, tex_str.as_ptr()), 0);
+          gl.BindVertexArray(black_bishop_sprite.vao);
+          let translation_matrix = mat4::translation(-1.5, 3.5, 0.0);
+          let m = mat4::col_mul(projection, translation_matrix);
+          gl.UniformMatrix4fv(gl.GetUniformLocation(img_shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, m.as_ptr());
+          gl.DrawArrays(gl::TRIANGLES, 0, 6);
+          gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+          
+          gl.ActiveTexture(gl::TEXTURE0 + 0);
+          gl.BindTexture(gl::TEXTURE_2D, black_king_sprite.tex.id);
+          gl.Uniform1i(gl.GetUniformLocation(img_shader_program.id, tex_str.as_ptr()), 0);
+          gl.BindVertexArray(black_king_sprite.vao);
+          let translation_matrix = mat4::translation(-0.5, 3.5, 0.0);
+          let m = mat4::col_mul(projection, translation_matrix);
+          gl.UniformMatrix4fv(gl.GetUniformLocation(img_shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, m.as_ptr());
+          gl.DrawArrays(gl::TRIANGLES, 0, 6);
+          gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+
             
-            // gl.UniformMatrix4fv(gl.GetUniformLocation(shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, projection.as_ptr());
-            // 
-            // gl.DrawArrays(gl::TRIANGLES, 0, 3);
+          shader_program.set_used();
+          let translation_matrix = mat4::translation(x_translation, y_translation, 0.0);
+          let mvp = mat4::col_mul(projection, translation_matrix);
+          gl.BindVertexArray(renderable_colored_shape.vao);
+          gl.UniformMatrix4fv(gl.GetUniformLocation(shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, mvp.as_ptr());
+          gl.DrawArrays(
+              gl::TRIANGLES, // mode
+              0,             // starting index in the enabled arrays
+              6,             // number of indices to be rendered
+          );
         }
 
         window.gl_swap_window();

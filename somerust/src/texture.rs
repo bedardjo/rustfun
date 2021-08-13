@@ -3,7 +3,9 @@ use gl;
 use image::{DynamicImage, GenericImageView};
 
 pub struct Texture {
-  pub id: gl::types::GLuint
+  pub id: gl::types::GLuint,
+  pub width: u32,
+  pub height: u32,
 }
 
 pub fn create_texture(image: &str, gl: &gl::Gl) -> Texture {
@@ -26,8 +28,8 @@ pub fn create_texture(image: &str, gl: &gl::Gl) -> Texture {
 
     gl.ActiveTexture(gl::TEXTURE0);
 
-    gl.TexParameterf(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as f32); //GL_NEAREST = no smoothing
-    gl.TexParameterf(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as f32);
+    gl.TexParameterf(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as f32);
+    gl.TexParameterf(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as f32);
 
     gl.TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA as i32, w as i32, h as i32, 0, gl::RGBA, gl::UNSIGNED_BYTE, raw_data.as_ptr() as *const core::ffi::c_void);
 
@@ -35,6 +37,8 @@ pub fn create_texture(image: &str, gl: &gl::Gl) -> Texture {
   }
 
   return Texture {
-    id: id
+    id: id,
+    width: w,
+    height: h
   }
 }
