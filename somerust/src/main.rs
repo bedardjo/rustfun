@@ -17,12 +17,13 @@ pub mod castling;
 pub mod chess_color;
 
 use chess_square::{ChessSquare};
-use std::collections::{HashMap};
+use rand::Rng;
+use std::collections::{HashMap, HashSet};
 
-use crate::{castling::Castling, chess_move::{ChessMove, do_move, undo_move}};
+use crate::{castling::Castling, chess_color::ChessColor, chess_move::{ChessMove, do_move, get_valid_moves, undo_move}};
 
-fn main() {  
-  print!("{}", std::env::current_dir().unwrap().display());
+fn main() {
+  let mut rng = rand::thread_rng();
   let sdl = sdl2::init().unwrap();
   let video_subsystem = sdl.video().unwrap();
   let gl_attr = video_subsystem.gl_attr();
@@ -33,17 +34,26 @@ fn main() {
   gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
   gl_attr.set_context_version(4, 1);
 
+  let screen_width = 900;
+  let screen_height = 700;
+  let pixels_per_unit = 45.0;
+  let screen_unit_width = screen_width as f32 / pixels_per_unit;
+  let screen_unit_height = screen_height as f32 / pixels_per_unit;
+
   let window = video_subsystem
-      .window("Game", 900, 700)
+      .window("Game", screen_width, screen_height)
       .opengl()
       .resizable()
       .build()
       .unwrap();
   let mut x_translation = 0.0;
   let mut y_translation = 0.0;
-  let aspect_ratio = 900.0 / 700.0;
-  let width = aspect_ratio * 10.0;
-  let projection = mat4::orthographic(-width * 0.5, width * 0.5, -5.0, 5.0, -1.0, 1.0);
+  let projection = mat4::orthographic(
+    -screen_unit_width * 0.5,
+    screen_unit_width * 0.5,
+    -screen_unit_height * 0.5,
+    screen_unit_height * 0.5,
+    -1.0, 1.0);
 
   let _gl_context = window.gl_create_context().unwrap();
   let gl = gl::Gl::load_with(|s| {
@@ -82,174 +92,28 @@ fn main() {
   let black : vec3::Vec3 = [46.0 / 100.0, 58.0 / 100.0, 33.0 / 100.0];
   let white : vec3::Vec3 = [93.0 / 100.0, 93.0 / 100.0, 82.0 / 100.0];
   let renderable_colored_shape = renderable_colored_shape::create(colored_shape::equilateral_triangle(0.2), &gl);
-  let black_square = renderable_colored_shape::create(colored_shape::square(1.0, &black), &gl);
-  let white_square = renderable_colored_shape::create(colored_shape::square(1.0, &white), &gl);
-
-  let pixels_per_unit = 240.0;
+  let black_square = renderable_colored_shape::create(colored_shape::square(0.5, &black), &gl);
+  let white_square = renderable_colored_shape::create(colored_shape::square(0.5, &white), &gl);
 
   let mut sprites : HashMap<ChessSquare, sprite::Sprite> = HashMap::new();
-  sprites.insert(ChessSquare::WhitePawn, sprite::create_sprite("./imagery/chess_pieces/white_pawn.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::WhiteBishop, sprite::create_sprite("./imagery/chess_pieces/white_bishop.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::WhiteKing, sprite::create_sprite("./imagery/chess_pieces/white_king.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::WhiteKnight, sprite::create_sprite("./imagery/chess_pieces/white_knight.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::WhiteQueen, sprite::create_sprite("./imagery/chess_pieces/white_queen.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::WhiteRook, sprite::create_sprite("./imagery/chess_pieces/white_rook.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhitePawn, sprite::create_sprite("./imagery/chess_pieces/white_pawn_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteBishop, sprite::create_sprite("./imagery/chess_pieces/white_bishop_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteKing, sprite::create_sprite("./imagery/chess_pieces/white_king_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteKnight, sprite::create_sprite("./imagery/chess_pieces/white_knight_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteQueen, sprite::create_sprite("./imagery/chess_pieces/white_queen_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::WhiteRook, sprite::create_sprite("./imagery/chess_pieces/white_rook_45.png", pixels_per_unit, &gl));
   
-  sprites.insert(ChessSquare::BlackPawn, sprite::create_sprite("./imagery/chess_pieces/black_pawn.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::BlackBishop, sprite::create_sprite("./imagery/chess_pieces/black_bishop.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::BlackKing, sprite::create_sprite("./imagery/chess_pieces/black_king.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::BlackKnight, sprite::create_sprite("./imagery/chess_pieces/black_knight.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::BlackQueen, sprite::create_sprite("./imagery/chess_pieces/black_queen.png", pixels_per_unit, &gl));
-  sprites.insert(ChessSquare::BlackRook, sprite::create_sprite("./imagery/chess_pieces/black_rook.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackPawn, sprite::create_sprite("./imagery/chess_pieces/black_pawn_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackBishop, sprite::create_sprite("./imagery/chess_pieces/black_bishop_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackKing, sprite::create_sprite("./imagery/chess_pieces/black_king_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackKnight, sprite::create_sprite("./imagery/chess_pieces/black_knight_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackQueen, sprite::create_sprite("./imagery/chess_pieces/black_queen_45.png", pixels_per_unit, &gl));
+  sprites.insert(ChessSquare::BlackRook, sprite::create_sprite("./imagery/chess_pieces/black_rook_45.png", pixels_per_unit, &gl));
 
   let chess_board = chess_board::create_new_board();
 
   let mut board_copy = chess_board.copy_board();
-  let game_moves: Vec<ChessMove> = vec![
-    ChessMove{
-      piece: ChessSquare::WhitePawn,
-      x: 4,
-      y: 1,
-      to_x: 4,
-      to_y: 3,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::BlackPawn,
-      x: 3,
-      y: 6,
-      to_x: 3,
-      to_y: 4,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::WhitePawn,
-      x: 4,
-      y: 3,
-      to_x: 3,
-      to_y: 4,
-      capture: Some(ChessSquare::BlackPawn),
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::BlackQueen,
-      x: 3,
-      y: 7,
-      to_x: 3,
-      to_y: 4,
-      capture: Some(ChessSquare::WhitePawn),
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::WhiteKnight,
-      x: 1,
-      y: 0,
-      to_x: 2,
-      to_y: 2,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::BlackQueen,
-      x: 3,
-      y: 4,
-      to_x: 0,
-      to_y: 4,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::WhitePawn,
-      x: 3,
-      y: 1,
-      to_x: 3,
-      to_y: 3,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::BlackKnight,
-      x: 6,
-      y: 7,
-      to_x: 5,
-      to_y: 5,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::WhiteKnight,
-      x: 6,
-      y: 0,
-      to_x: 5,
-      to_y: 2,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::BlackBishop,
-      x: 2,
-      y: 7,
-      to_x: 5,
-      to_y: 4,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::WhiteBishop,
-      x: 5,
-      y: 0,
-      to_x: 4,
-      to_y: 1,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::BlackPawn,
-      x: 2,
-      y: 6,
-      to_x: 2,
-      to_y: 5,
-      capture: None,
-      promotion: None,
-      castling: None,
-      en_pessant: false
-    },
-    ChessMove{
-      piece: ChessSquare::WhiteKing,
-      x: 4,
-      y: 0,
-      to_x: 6,
-      to_y: 0,
-      capture: None,
-      promotion: None,
-      castling: Some(Castling::WhiteShort),
-      en_pessant: false
-    },
-  ];
+  let mut game_moves: Vec<ChessMove> = Vec::new();
   let mut current_move = 0;
 
 
@@ -259,6 +123,9 @@ fn main() {
       gl.Enable(gl::MULTISAMPLE);
   }
 
+  let mut current_player = ChessColor::White;
+  let mut available_castling = HashSet::new();
+
     let mvp_str = CString::new("mvp").unwrap();
     let tex_str = CString::new("tex").unwrap();
     let mut event_pump = sdl.event_pump().unwrap();
@@ -266,6 +133,19 @@ fn main() {
         for event in event_pump.poll_iter() {
             match event {
                 sdl2::event::Event::Quit { .. } => break 'main,
+                sdl2::event::Event::MouseButtonDown { timestamp:_, window_id:_, which, mouse_btn, clicks, x, y} => {
+                  let x_norm = x as f32 / screen_width as f32;
+                  let y_norm = y as f32 / screen_height as f32;
+                  let ux = (-0.5 + x_norm as f32) * screen_unit_width as f32;
+                  let uy = (0.5 - y_norm as f32) * screen_unit_height as f32;
+                  print!("mouse click at ({}, {})\n", ux, uy);
+                  if -4.0 < ux && ux < 4.0 && -4.0 < uy && uy < 4.0 {
+                    let bx = (ux + 3.5).round() as usize;
+                    let by = (uy + 3.5).round() as usize;
+                    print!("board pos at ({}, {})\n", bx, by);
+                    print!("{}\n", board_copy[by][bx].to_string());
+                  }
+                }
                 sdl2::event::Event::KeyDown { timestamp:_, window_id:_, keycode, scancode:_, keymod:_, repeat:_ } => {
                   match keycode {
                     Some(code) => {
@@ -285,13 +165,24 @@ fn main() {
                         sdl2::keyboard::Keycode::Escape => {
                           break 'main;
                         }
-                        sdl2::keyboard::Keycode::Right if current_move < game_moves.len() => {
-                          do_move(&game_moves[current_move], &mut board_copy);
+                        sdl2::keyboard::Keycode::Right => {
+                          let mut possible_moves = get_valid_moves(&None, &current_player, &board_copy, &available_castling);
+                          let chosen_move = possible_moves.swap_remove(rng.gen_range(0..possible_moves.len()));
+                          do_move(&chosen_move, &mut board_copy);
+                          game_moves.push(chosen_move);
                           current_move += 1;
+                          current_player = current_player.get_opposite();
                         }
-                        sdl2::keyboard::Keycode::Left if (current_move > 0) => {
-                          undo_move(&game_moves[current_move - 1], &mut board_copy);
-                          current_move -= 1;
+                        sdl2::keyboard::Keycode::Left => {
+                          let last_move = game_moves.pop();
+                          match last_move {
+                            Some(m) => {
+                              undo_move(&m, &mut board_copy);
+                              current_move -= 1;
+                              current_player = current_player.get_opposite();
+                            },
+                            _ => {}
+                          }
                         }
                         _ => {}
                       }
@@ -339,7 +230,6 @@ fn main() {
               }
             }
           }
-
             
           shader_program.set_used();
           let translation_matrix = mat4::translation(x_translation, y_translation, 0.0);

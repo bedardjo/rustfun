@@ -31,13 +31,13 @@ pub fn equilateral_triangle(radius: f32) -> ColoredShape {
 
 pub fn square(radius: f32, color: &vec3::Vec3) -> ColoredShape {
   let vertices = vec![
-    [-radius / 2.0, -radius / 2.0, 0.0],
-    [-radius / 2.0, radius / 2.0, 0.0],
-    [radius / 2.0, radius / 2.0, 0.0],
+    [-radius, -radius, 0.0],
+    [-radius, radius, 0.0],
+    [radius, radius, 0.0],
     
-    [radius / 2.0, radius / 2.0, 0.0],
-    [radius / 2.0, -radius / 2.0, 0.0],
-    [-radius / 2.0, -radius / 2.0, 0.0],
+    [radius, radius, 0.0],
+    [radius, -radius, 0.0],
+    [-radius, -radius, 0.0],
   ];
 
   let colors = vec![

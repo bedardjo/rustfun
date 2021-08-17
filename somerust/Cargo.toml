@@ -6,6 +6,7 @@ edition = "2018"
 [dependencies]
 gl = { path = "../lib/gl" }
 image = "0.23.14"
+rand = "0.8.4"
 
 [dependencies.sdl2]
 version = "^0.34.5"

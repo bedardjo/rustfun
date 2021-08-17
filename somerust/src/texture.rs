@@ -9,7 +9,6 @@ pub struct Texture {
 }
 
 pub fn create_texture(image: &str, gl: &gl::Gl) -> Texture {
-  print!("{}", image);
   let img = image::open(image).unwrap();
 
   let w = img.width();

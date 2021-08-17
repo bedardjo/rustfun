@@ -132,10 +132,10 @@ fn potential_pawn_moves(last_move: &Option<ChessMove>, x: usize, y: usize, piece
   } else if clr == ChessColor::Black && y == 6 && &board[4][x] == &ChessSquare::Empty {
     pawn_moves.push(simple_move(piece, x, y, x, 4));
   }
-  if x > 0 && board[new_y][x - 1].get_color() == opp { // take left
+  if x > 0 && board[new_y][x - 1] != ChessSquare::Empty && board[new_y][x - 1].get_color() == opp { // take left
     pawn_moves.append(&mut create_pawn_moves(x, y, x - 1, new_y, piece, Some(board[new_y][x - 1].clone())));
   }
-  if x < 7 && board[new_y][x + 1].get_color() == opp { // take right
+  if x < 7 && board[new_y][x + 1] != ChessSquare::Empty && board[new_y][x + 1].get_color() == opp { // take right
     pawn_moves.append(&mut create_pawn_moves(x, y, x + 1, new_y, piece, Some(board[new_y][x + 1].clone())));
   }
   if last_move.is_some() {
@@ -535,8 +535,8 @@ pub fn get_valid_moves(last_move: &Option<ChessMove>, player: &ChessColor, board
     let check = get_check(&testing_board);
     undo_move(&m, &mut testing_board);
     return match check {
-      Some(c) => &c == player,
-      _ => false
+      Some(c) => &c != player,
+      _ => true
     }
   }).collect::<Vec<ChessMove>>();
 }
