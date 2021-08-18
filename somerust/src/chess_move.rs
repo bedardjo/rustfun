@@ -5,6 +5,7 @@ use crate::chess_color::ChessColor;
 use crate::chess_square::{ChessSquare};
 use crate::castling::Castling;
 
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct ChessMove {
   pub piece : ChessSquare,
   pub x : usize,

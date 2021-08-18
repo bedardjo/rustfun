@@ -18,9 +18,9 @@ pub mod chess_color;
 
 use chess_square::{ChessSquare};
 use rand::Rng;
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, ptr::NonNull};
 
-use crate::{castling::Castling, chess_color::ChessColor, chess_move::{ChessMove, do_move, get_valid_moves, undo_move}};
+use crate::{castling::Castling, chess_board::{ChessBoard, copy_board}, chess_color::ChessColor, chess_move::{ChessMove, do_move, get_valid_moves, undo_move}};
 
 fn main() {
   let mut rng = rand::thread_rng();
@@ -110,21 +110,15 @@ fn main() {
   sprites.insert(ChessSquare::BlackQueen, sprite::create_sprite("./imagery/chess_pieces/black_queen_45.png", pixels_per_unit, &gl));
   sprites.insert(ChessSquare::BlackRook, sprite::create_sprite("./imagery/chess_pieces/black_rook_45.png", pixels_per_unit, &gl));
 
-  let chess_board = chess_board::create_new_board();
-
-  let mut board_copy = chess_board.copy_board();
+  let mut chess_board = chess_board::create_new_board();
   let mut game_moves: Vec<ChessMove> = Vec::new();
-  let mut current_move = 0;
-
+  let mut move_start_coords : Option<(usize, usize)> = None;
 
   unsafe {
       gl.Viewport(0, 0, 900, 700);
       gl.ClearColor(0.3, 0.3, 0.5, 1.0);
       gl.Enable(gl::MULTISAMPLE);
   }
-
-  let mut current_player = ChessColor::White;
-  let mut available_castling = HashSet::new();
 
     let mvp_str = CString::new("mvp").unwrap();
     let tex_str = CString::new("tex").unwrap();
@@ -134,18 +128,45 @@ fn main() {
             match event {
                 sdl2::event::Event::Quit { .. } => break 'main,
                 sdl2::event::Event::MouseButtonDown { timestamp:_, window_id:_, which, mouse_btn, clicks, x, y} => {
-                  let x_norm = x as f32 / screen_width as f32;
-                  let y_norm = y as f32 / screen_height as f32;
-                  let ux = (-0.5 + x_norm as f32) * screen_unit_width as f32;
-                  let uy = (0.5 - y_norm as f32) * screen_unit_height as f32;
-                  print!("mouse click at ({}, {})\n", ux, uy);
+                  let (ux, uy) = get_unit_coords(x, y, screen_width, screen_height, pixels_per_unit);
                   if -4.0 < ux && ux < 4.0 && -4.0 < uy && uy < 4.0 {
-                    let bx = (ux + 3.5).round() as usize;
-                    let by = (uy + 3.5).round() as usize;
-                    print!("board pos at ({}, {})\n", bx, by);
-                    print!("{}\n", board_copy[by][bx].to_string());
+                    let (bx, by) = get_board_coords((ux, uy));
+                    let square = &chess_board.squares[by][bx];
+                    if square != &ChessSquare::Empty && square.get_color() == chess_board.current_player {
+                      move_start_coords = Some((bx, by));
+                    }
                   }
-                }
+                },
+                sdl2::event::Event::MouseButtonUp { timestamp:_, window_id:_, which, mouse_btn, clicks, x, y} => {
+                  let (ux, uy) = get_unit_coords(x, y, screen_width, screen_height, pixels_per_unit);
+                  if -4.0 < ux && ux < 4.0 && -4.0 < uy && uy < 4.0 {
+                    let (bx, by) = get_board_coords((ux, uy));
+                    match move_start_coords {
+                      Some(c) => {
+                        let potential_capture = &chess_board.squares[by][bx];
+                        if potential_capture == &ChessSquare::Empty || potential_capture.get_color() == chess_board.current_player.get_opposite() {
+                          let potential_move = ChessMove{
+                            piece: chess_board.squares[c.1][c.0].clone(),
+                            x: c.0,
+                            y: c.1,
+                            to_x: bx,
+                            to_y: by,
+                            capture: if potential_capture == &ChessSquare::Empty { None } else { Some(potential_capture.clone()) },
+                            promotion: None,
+                            castling: None,
+                            en_pessant: false,
+                          };
+                          let valid_moves = chess_board.get_valid_moves();
+                          if valid_moves.contains(&potential_move) {
+                            chess_board = chess_board.do_move(&potential_move);
+                          }
+                        }
+                      }
+                      None => {}
+                    }
+                  }
+                  move_start_coords = None;
+                },
                 sdl2::event::Event::KeyDown { timestamp:_, window_id:_, keycode, scancode:_, keymod:_, repeat:_ } => {
                   match keycode {
                     Some(code) => {
@@ -166,20 +187,27 @@ fn main() {
                           break 'main;
                         }
                         sdl2::keyboard::Keycode::Right => {
-                          let mut possible_moves = get_valid_moves(&None, &current_player, &board_copy, &available_castling);
+                          let mut possible_moves = chess_board.get_valid_moves();
                           let chosen_move = possible_moves.swap_remove(rng.gen_range(0..possible_moves.len()));
-                          do_move(&chosen_move, &mut board_copy);
+                          chess_board = chess_board.do_move(&chosen_move);
                           game_moves.push(chosen_move);
-                          current_move += 1;
-                          current_player = current_player.get_opposite();
                         }
                         sdl2::keyboard::Keycode::Left => {
                           let last_move = game_moves.pop();
                           match last_move {
                             Some(m) => {
+                              let mut board_copy = copy_board(&chess_board.squares);
                               undo_move(&m, &mut board_copy);
-                              current_move -= 1;
-                              current_player = current_player.get_opposite();
+                              chess_board = ChessBoard{
+                                last_move: match game_moves.last() {
+                                  Some(m) => Some(m.clone()),
+                                  None => None,
+                                },
+                                squares: board_copy,
+                                current_player: chess_board.current_player.get_opposite(),
+                                available_castling: chess_board.available_castling,
+                                move_number: chess_board.move_number - 1
+                              };
                             },
                             _ => {}
                           }
@@ -216,12 +244,12 @@ fn main() {
 
           for y in 0..8 {
             for x in 0..8 {
-              if board_copy[7 - y][x] != ChessSquare::Empty {
+              if chess_board.squares[7 - y][x] != ChessSquare::Empty {
                 img_shader_program.set_used();
                 gl.ActiveTexture(gl::TEXTURE0 + 0);
-                gl.BindTexture(gl::TEXTURE_2D, sprites.get(&board_copy[7 - y][x]).unwrap().tex.id);
+                gl.BindTexture(gl::TEXTURE_2D, sprites.get(&chess_board.squares[7 - y][x]).unwrap().tex.id);
                 gl.Uniform1i(gl.GetUniformLocation(img_shader_program.id, tex_str.as_ptr()), 0);
-                gl.BindVertexArray(sprites.get(&board_copy[7 - y][x]).unwrap().vao);
+                gl.BindVertexArray(sprites.get(&chess_board.squares[7 - y][x]).unwrap().vao);
                 let translation_matrix = mat4::translation(-3.5 + x as f32, -3.5 + (7 - y) as f32, 0.0);
                 let m = mat4::col_mul(projection, translation_matrix);
                 gl.UniformMatrix4fv(gl.GetUniformLocation(img_shader_program.id, mvp_str.as_ptr()), 1, gl::FALSE, m.as_ptr());
@@ -245,4 +273,18 @@ fn main() {
 
         window.gl_swap_window();
     }
+}
+
+fn get_unit_coords(screen_x: i32, screen_y: i32, screen_width: u32, screen_height: u32, unit_pixel_size: f32) -> (f32, f32) {
+  let x_norm = screen_x as f32 / screen_width as f32;
+  let y_norm = screen_y as f32 / screen_height as f32;
+  let ux = (-0.5 + x_norm as f32) * (screen_width as f32 / unit_pixel_size);
+  let uy = (0.5 - y_norm as f32) * (screen_height as f32 / unit_pixel_size);
+  return (ux, uy);
+}
+
+fn get_board_coords(unit_coords: (f32, f32)) -> (usize, usize) {
+  let bx = (unit_coords.0 + 3.5).round() as usize;
+  let by = (unit_coords.1 + 3.5).round() as usize;
+  return (bx, by);
 }
