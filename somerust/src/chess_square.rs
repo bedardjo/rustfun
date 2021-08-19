@@ -39,6 +39,25 @@ impl ChessSquare {
       Self::BlackKing=> String::from("BlackKing"),
     }
   }
+  pub fn get_char(&self)->String {
+    return match self {
+      Self::Empty => panic!("at the disco"),
+  
+      Self::WhitePawn => String::from("P"),
+      Self::WhiteRook=> String::from("R"),
+      Self::WhiteKnight=> String::from("N"),
+      Self::WhiteBishop=> String::from("B"),
+      Self::WhiteQueen=> String::from("Q"),
+      Self::WhiteKing=> String::from("K"),
+      
+      Self::BlackPawn=> String::from("p"),
+      Self::BlackRook=> String::from("r"),
+      Self::BlackKnight=> String::from("n"),
+      Self::BlackBishop=> String::from("b"),
+      Self::BlackQueen=> String::from("q"),
+      Self::BlackKing=> String::from("k"),
+    }
+  }
   pub fn get_color(&self)->ChessColor {
     return match self {
       Self::Empty => { panic!("empty has no color") },

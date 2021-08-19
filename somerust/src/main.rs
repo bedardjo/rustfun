@@ -15,12 +15,15 @@ pub mod chess_board;
 pub mod chess_move;
 pub mod castling;
 pub mod chess_color;
+pub mod thought_node;
+pub mod chess_scoring;
 
 use chess_square::{ChessSquare};
 use rand::Rng;
 use std::{collections::{HashMap, HashSet}, ptr::NonNull};
+use thought_node::ThoughtNode;
 
-use crate::{castling::Castling, chess_board::{ChessBoard, copy_board}, chess_color::ChessColor, chess_move::{ChessMove, do_move, get_valid_moves, undo_move}};
+use crate::{castling::Castling, chess_board::{ChessBoard, copy_board}, chess_color::ChessColor, chess_move::{ChessMove, do_move, get_valid_moves, undo_move}, chess_scoring::score_game_state};
 
 fn main() {
   let mut rng = rand::thread_rng();
@@ -85,6 +88,8 @@ fn main() {
       &gl,
       &CString::new(include_str!("shaders/simple_image.frag")).unwrap(),
   ).unwrap();
+
+  let active_computer = true;
   
   let img_shader_program =
       render_gl::Program::from_shaders(&gl, &[img_vert_shader, img_frag_shader]).unwrap();
@@ -110,7 +115,19 @@ fn main() {
   sprites.insert(ChessSquare::BlackQueen, sprite::create_sprite("./imagery/chess_pieces/black_queen_45.png", pixels_per_unit, &gl));
   sprites.insert(ChessSquare::BlackRook, sprite::create_sprite("./imagery/chess_pieces/black_rook_45.png", pixels_per_unit, &gl));
 
+  let fen1 = String::from("RNBQK1NR/PPPP1PPP/8/4P3/8/B7/1ppppppp/rnbqkbnr b KQkq - 0 3");
+  // let mut chess_board = chess_board::from_forsyth_edwards_notation(&fen1);
   let mut chess_board = chess_board::create_new_board();
+
+  // let mut tn = ThoughtNode{
+  //   game_state: chess_board.clone(),
+  //   children: Vec::new(),
+  //   calculated_score: 0
+  // };
+  // tn.alphabeta(4);
+  // for b in tn.children {
+  //   print!("fen: {} | score: {}\n", b.game_state.get_forsyth_edwards_notation(), b.calculated_score);
+  // }
   let mut game_moves: Vec<ChessMove> = Vec::new();
   let mut move_start_coords : Option<(usize, usize)> = None;
 
@@ -159,6 +176,16 @@ fn main() {
                           let valid_moves = chess_board.get_valid_moves();
                           if valid_moves.contains(&potential_move) {
                             chess_board = chess_board.do_move(&potential_move);
+                            if active_computer && chess_board.current_player == ChessColor::Black {
+                              let mut thought_node = ThoughtNode{
+                                game_state: chess_board.clone(),
+                                children: Vec::new(),
+                                calculated_score: 0
+                              };
+                              thought_node.alphabeta(4);
+                              let best_ai_move = thought_node.get_best_move();
+                              chess_board = chess_board.do_move(&best_ai_move);
+                            }
                           }
                         }
                       }
@@ -182,6 +209,9 @@ fn main() {
                         }
                         sdl2::keyboard::Keycode::D => {
                           x_translation += 0.5;
+                        }
+                        sdl2::keyboard::Keycode::F => {
+                          print!("{}\n", chess_board.get_forsyth_edwards_notation());
                         }
                         sdl2::keyboard::Keycode::Escape => {
                           break 'main;

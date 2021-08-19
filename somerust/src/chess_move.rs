@@ -1,6 +1,7 @@
+use core::panic;
 use std::collections::HashSet;
 
-use crate::chess_board::copy_board;
+use crate::chess_board::{ChessBoard, copy_board};
 use crate::chess_color::ChessColor;
 use crate::chess_square::{ChessSquare};
 use crate::castling::Castling;
@@ -348,9 +349,6 @@ pub fn do_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
   if board[chess_move.y][chess_move.x] != chess_move.piece {
     panic!("cannot perform move on board");
   }
-  if chess_move.en_pessant {
-    panic!("en pessant is not yet supported");
-  }
   match &chess_move.castling {
     Some(castling) => {
       match castling {
@@ -397,6 +395,12 @@ pub fn do_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
       board[chess_move.to_y][chess_move.to_x] = match &chess_move.promotion {
         Some(p) => p.clone(),
         None => chess_move.piece.clone()
+      };
+      if chess_move.en_pessant {
+        if board[chess_move.y][chess_move.to_x] == ChessSquare::Empty {
+          panic!("not a valid en-pessant");
+        }
+        board[chess_move.y][chess_move.to_x] = ChessSquare::Empty;
       }
     }
   }
@@ -405,9 +409,6 @@ pub fn do_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
 pub fn undo_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
   if !chess_move.en_pessant && board[chess_move.to_y][chess_move.to_x] != chess_move.piece {
     panic!("bad state");
-  }
-  if chess_move.en_pessant {
-    panic!("en pessant is not yet supported");
   }
   match &chess_move.castling {
     Some(castling) => {
@@ -439,9 +440,17 @@ pub fn undo_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
       }
     },
     None => {
-      board[chess_move.to_y][chess_move.to_x] = match &chess_move.capture {
-        Some(cap) => cap.clone(),
-        None => ChessSquare::Empty
+      match &chess_move.capture {
+        Some(cap) => {
+          if chess_move.en_pessant {
+            board[chess_move.y][chess_move.to_x] = cap.clone();
+          } else {
+            board[chess_move.to_y][chess_move.to_x] = cap.clone();
+          }
+        },
+        None => {
+          board[chess_move.to_y][chess_move.to_x] = ChessSquare::Empty;
+        }
       };
       board[chess_move.y][chess_move.x] = chess_move.piece.clone();
     }
