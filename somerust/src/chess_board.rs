@@ -19,41 +19,66 @@ impl ChessBoard {
   pub fn do_move(&self, chess_move: &ChessMove) -> ChessBoard {
     let mut new_board = copy_board(&self.squares);
     do_move(chess_move, &mut new_board);
-    // TODO figure out castling etc.
+    let mut new_castling = self.available_castling.clone();
+    match chess_move.piece {
+      ChessSquare::BlackKing => {
+        new_castling.remove(&Castling::BlackLong);
+        new_castling.remove(&Castling::BlackShort);
+      }
+      ChessSquare::WhiteKing => {
+        new_castling.remove(&Castling::WhiteLong);
+        new_castling.remove(&Castling::WhiteShort);
+      }
+      ChessSquare::BlackRook => {
+        if chess_move.y == 7 && chess_move.x == 0 {
+          new_castling.remove(&Castling::BlackLong);
+        } else if chess_move.y == 7 && chess_move.x == 7 {
+          new_castling.remove(&Castling::BlackShort);
+        }
+      }
+      ChessSquare::WhiteRook => {
+        if chess_move.y == 0 && chess_move.x == 0 {
+          new_castling.remove(&Castling::WhiteLong);
+        } else if chess_move.y == 0 && chess_move.x == 7 {
+          new_castling.remove(&Castling::WhiteShort);
+        }
+      }
+      _ => { }
+    }
+    match chess_move.capture.as_ref() {
+      Some(c) => {
+        match c {
+          &ChessSquare::WhiteRook => {
+            if chess_move.to_y == 0 && chess_move.to_x == 0 {
+              new_castling.remove(&Castling::WhiteLong);
+            } else if chess_move.to_y == 0 && chess_move.to_x == 7 {
+              new_castling.remove(&Castling::WhiteShort);
+            }
+          },
+          &ChessSquare::BlackRook => {
+            if chess_move.to_y == 7 && chess_move.to_x == 0 {
+              new_castling.remove(&Castling::BlackLong);
+            } else if chess_move.to_y == 7 && chess_move.to_x == 7 {
+              new_castling.remove(&Castling::BlackShort);
+            }
+          },
+          _ => {}
+        }
+      }
+      None => {}
+    }
     return ChessBoard{
       last_move: Some(chess_move.clone()),
       squares: new_board,
       current_player: self.current_player.get_opposite(),
-      available_castling: self.available_castling.clone(),
+      available_castling: new_castling,
       move_number: self.move_number + 1
     }
   }
 
   pub fn get_forsyth_edwards_notation(&self) -> String {
     let mut fen = String::new();
-    for y in 0..8 {
-      let mut empty_squares = 0;
-      for x in 0..8 {
-        match self.squares[y][x] {
-          ChessSquare::Empty => {
-            empty_squares += 1;
-          },
-          _ => {
-            if empty_squares > 0 {
-              fen.push_str(empty_squares.to_string().as_str());
-            }
-            fen.push_str(self.squares[y][x].get_char().as_str());
-            empty_squares = 0;
-          }
-        }
-      }
-      if empty_squares > 0 {
-        fen.push_str(empty_squares.to_string().as_str());
-      }
-      if y < 7 {
-        fen.push_str("/");
-      }
-    }
+    fen.push_str(&get_fen_board_part(&self.squares));
 
     fen.push_str(" ");
     if self.current_player == ChessColor::White {
@@ -256,4 +281,32 @@ pub fn from_forsyth_edwards_notation(fen: &String) -> ChessBoard {
     available_castling: castling,
     move_number: fen_parts[5].parse::<u32>().unwrap()
   };
+}
+
+pub fn get_fen_board_part(board: &[[ChessSquare; 8]; 8]) -> String {
+  let mut fen = String::new();
+  for y in 0..8 {
+    let mut empty_squares = 0;
+    for x in 0..8 {
+      match board[7 - y][x] {
+        ChessSquare::Empty => {
+          empty_squares += 1;
+        },
+        _ => {
+          if empty_squares > 0 {
+            fen.push_str(empty_squares.to_string().as_str());
+          }
+          fen.push_str(board[7 - y][x].get_char().as_str());
+          empty_squares = 0;
+        }
+      }
+    }
+    if empty_squares > 0 {
+      fen.push_str(empty_squares.to_string().as_str());
+    }
+    if y < 7 {
+      fen.push_str("/");
+    }
+  }
+  return fen;
 }

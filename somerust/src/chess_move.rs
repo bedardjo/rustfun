@@ -1,7 +1,7 @@
 use core::panic;
 use std::collections::HashSet;
 
-use crate::chess_board::{ChessBoard, copy_board};
+use crate::chess_board::{ChessBoard, copy_board, get_fen_board_part};
 use crate::chess_color::ChessColor;
 use crate::chess_square::{ChessSquare};
 use crate::castling::Castling;
@@ -18,6 +18,28 @@ pub struct ChessMove {
   pub promotion : Option<ChessSquare>,
   pub castling: Option<Castling>,
   pub en_pessant : bool,
+}
+
+impl ChessMove {
+  pub fn to_string(&self) -> String {
+    return match self.castling.as_ref() {
+      Some(c) => match c {
+        &Castling::BlackLong | &Castling::WhiteLong => {String::from("O-O-O")},       
+         &Castling::WhiteShort | &Castling::BlackShort => {String::from("O-O")}
+      }
+      _ => match &self.piece {
+          &ChessSquare::WhitePawn | &ChessSquare::BlackPawn => { [
+            String::from("abcdefgh".chars().nth(self.to_x).unwrap()),
+            (self.to_y + 1).to_string() ].join("")
+          },
+          _ => { [
+            self.piece.get_pgn_char(),
+            String::from("abcdefgh".chars().nth(self.to_x).unwrap()),
+            (self.to_y + 1).to_string() ].join("")
+          }
+        }
+    }
+  }
 }
 
 fn get_rook_directions() -> Vec<(i32, i32)> {
@@ -129,17 +151,19 @@ fn potential_pawn_moves(last_move: &Option<ChessMove>, x: usize, y: usize, piece
     pawn_moves.append(&mut create_pawn_moves(x, y, x, new_y, piece, None));
   }
   // move 2 spaces on first move
-  if clr == ChessColor::White && y == 1 && &board[3][x] == &ChessSquare::Empty {
+  if clr == ChessColor::White && y == 1 && &board[2][x] == &ChessSquare::Empty && &board[3][x] == &ChessSquare::Empty {
     pawn_moves.push(simple_move(piece, x, y, x, 3));
-  } else if clr == ChessColor::Black && y == 6 && &board[4][x] == &ChessSquare::Empty {
+  } else if clr == ChessColor::Black && y == 6 && &board[5][x] == &ChessSquare::Empty && &board[4][x] == &ChessSquare::Empty {
     pawn_moves.push(simple_move(piece, x, y, x, 4));
   }
+  // Captures
   if x > 0 && board[new_y][x - 1] != ChessSquare::Empty && board[new_y][x - 1].get_color() == opp { // take left
     pawn_moves.append(&mut create_pawn_moves(x, y, x - 1, new_y, piece, Some(board[new_y][x - 1].clone())));
   }
   if x < 7 && board[new_y][x + 1] != ChessSquare::Empty && board[new_y][x + 1].get_color() == opp { // take right
     pawn_moves.append(&mut create_pawn_moves(x, y, x + 1, new_y, piece, Some(board[new_y][x + 1].clone())));
   }
+  // En pessant
   if last_move.is_some() {
     let last = last_move.as_ref().unwrap();
     match last.piece {
@@ -156,18 +180,21 @@ fn potential_pawn_moves(last_move: &Option<ChessMove>, x: usize, y: usize, piece
           en_pessant: true
         });
       },
-      ChessSquare::BlackPawn if clr == ChessColor::White && new_y == 5 && last.y == 6 && last.to_y == 4 && (x as i32 - last.x as i32).abs() == 1 => {
-        pawn_moves.push(ChessMove{
-          piece: piece.clone(),
-          x: x,
-          y: y,
-          to_x: last.x,
-          to_y: 2,
-          capture: Some(ChessSquare::BlackPawn),
-          promotion: None,
-          castling: None,
-          en_pessant: true
-        });
+      ChessSquare::BlackPawn => {
+        let available = clr == ChessColor::White && new_y == 5 && last.y == 6 && last.to_y == 4 && (x as i32 - last.x as i32).abs() == 1;
+        if available {
+          pawn_moves.push(ChessMove{
+            piece: piece.clone(),
+            x: x,
+            y: y,
+            to_x: last.x,
+            to_y: 5,
+            capture: Some(ChessSquare::BlackPawn),
+            promotion: None,
+            castling: None,
+            en_pessant: true
+          });
+        }
       },
       _ => {}
     }
@@ -347,14 +374,21 @@ fn get_potential_moves(last_move: &Option<ChessMove>, player: &ChessColor, board
 
 pub fn do_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
   if board[chess_move.y][chess_move.x] != chess_move.piece {
-    panic!("cannot perform move on board");
+    let fen = ChessBoard{
+      last_move: None,
+      squares: copy_board(board),
+      current_player: chess_move.piece.get_color(),
+      available_castling: HashSet::new(),
+      move_number: 0
+    }.get_forsyth_edwards_notation();
+    panic!("cannot perform {} {} {} {} on board {}", chess_move.to_string(), chess_move.en_pessant, chess_move.capture.is_some(), chess_move.promotion.is_some(), fen);
   }
   match &chess_move.castling {
     Some(castling) => {
       match castling {
         Castling::WhiteLong => {
           if board[0][0] != ChessSquare::WhiteRook || board[0][4] != ChessSquare::WhiteKing {
-            panic!("cannot perform move on board");
+            panic!("cannot perform move on board {} on board {}", chess_move.to_string(), get_fen_board_part(board));
           }
           board[0][0] = ChessSquare::Empty;
           board[0][2] = ChessSquare::WhiteKing;
@@ -407,8 +441,15 @@ pub fn do_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
 }
 
 pub fn undo_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
-  if !chess_move.en_pessant && board[chess_move.to_y][chess_move.to_x] != chess_move.piece {
-    panic!("bad state");
+  if !chess_move.en_pessant && chess_move.promotion.is_none() && board[chess_move.to_y][chess_move.to_x] != chess_move.piece {
+    let fen = ChessBoard{
+      last_move: None,
+      squares: copy_board(board),
+      current_player: chess_move.piece.get_color(),
+      available_castling: HashSet::new(),
+      move_number: 0
+    }.get_forsyth_edwards_notation();
+    panic!("bad state {} for move {}", fen, chess_move.to_string());
   }
   match &chess_move.castling {
     Some(castling) => {
@@ -443,6 +484,7 @@ pub fn undo_move(chess_move: &ChessMove, board: &mut [[ChessSquare; 8]; 8]) {
       match &chess_move.capture {
         Some(cap) => {
           if chess_move.en_pessant {
+            board[chess_move.to_y][chess_move.to_x] = ChessSquare::Empty;
             board[chess_move.y][chess_move.to_x] = cap.clone();
           } else {
             board[chess_move.to_y][chess_move.to_x] = cap.clone();
@@ -521,14 +563,15 @@ pub fn is_check(x: usize, y: usize, board: &[[ChessSquare; 8]; 8], color: ChessC
   return false;
 }
 
-pub fn get_check(board: &[[ChessSquare; 8]; 8]) -> Option<ChessColor> {
+// checks if given player is in check
+pub fn get_check(board: &[[ChessSquare; 8]; 8], player: &ChessColor) -> Option<ChessColor> {
   for y in 0..8 {
     for x in 0..8 {
       match board[y][x] {
-        ChessSquare::WhiteKing if is_check(x, y, board, ChessColor::White) => {
+        ChessSquare::WhiteKing if player == &ChessColor::White && is_check(x, y, board, ChessColor::White) => {
           return Some(ChessColor::White);
         }
-        ChessSquare::BlackKing if is_check(x, y, board, ChessColor::Black) => {
+        ChessSquare::BlackKing if player == &ChessColor::Black && is_check(x, y, board, ChessColor::Black) => {
           return Some(ChessColor::Black);
         }
         _ => {}
@@ -541,12 +584,129 @@ pub fn get_check(board: &[[ChessSquare; 8]; 8]) -> Option<ChessColor> {
 pub fn get_valid_moves(last_move: &Option<ChessMove>, player: &ChessColor, board: &[[ChessSquare; 8]; 8], available_castling: &HashSet<Castling>) -> Vec<ChessMove> {
   let mut testing_board = copy_board(board);
   return get_potential_moves(last_move, player, board, available_castling).into_iter().filter(|m| {
-    do_move(&m, &mut testing_board);
-    let check = get_check(&testing_board);
-    undo_move(&m, &mut testing_board);
-    return match check {
-      Some(c) => &c != player,
-      _ => true
+    if board[m.y][m.x] == m.piece && testing_board[m.y][m.x] != m.piece {
+      let fen1 = ChessBoard{
+        last_move: None,
+        squares: copy_board(board),
+        current_player: player.clone(),
+        available_castling: HashSet::new(),
+        move_number: 0
+      }.get_forsyth_edwards_notation();
+      let fen2 = ChessBoard{
+        last_move: None,
+        squares: copy_board(&testing_board),
+        current_player: player.clone(),
+        available_castling: HashSet::new(),
+        move_number: 0
+      }.get_forsyth_edwards_notation();
+      print!("Some jank shit occurred {} {}!", fen1, fen2);
     }
+    return check_move_validity(player, m, &mut testing_board);
   }).collect::<Vec<ChessMove>>();
+}
+
+pub fn check_move_validity(player: &ChessColor, chess_move: &ChessMove, testing_board: &mut [[ChessSquare; 8]; 8]) -> bool {
+  return match chess_move.castling.as_ref() {
+    Some(c) => check_castling_validity(player, c, testing_board),
+    None => {
+      do_move(chess_move, testing_board);
+      let check = get_check(&testing_board, player);
+      undo_move(chess_move, testing_board);
+      return match check {
+        Some(c) => &c != player,
+        _ => true
+      }
+    }
+  }
+}
+
+pub fn check_castling_validity(player: &ChessColor, castling: &Castling, testing_board: &mut [[ChessSquare; 8]; 8])-> bool {
+  match castling {
+    &Castling::WhiteLong => {
+      let valid_position = testing_board[0][0] == ChessSquare::WhiteRook
+        && testing_board[0][1] == ChessSquare::Empty
+        && testing_board[0][2] == ChessSquare::Empty
+        && testing_board[0][3] == ChessSquare::Empty
+        && testing_board[0][4] == ChessSquare::WhiteKing;
+      if !valid_position {
+        return false;
+      }
+      for i in 0..3 {
+        testing_board[0][4] = ChessSquare::Empty;
+        testing_board[0][4 - i] = ChessSquare::WhiteKing;
+        let check = get_check(&testing_board, player);
+        let is_player_in_check = check.is_some() && check.as_ref().unwrap() == player;
+        testing_board[0][4 - i] = ChessSquare::Empty;
+        testing_board[0][4] = ChessSquare::WhiteKing;
+        if is_player_in_check {
+          return false;
+        }
+      }
+      return true;
+    },
+    &Castling::WhiteShort => {
+      let valid_position = testing_board[0][7] == ChessSquare::WhiteRook
+        && testing_board[0][6] == ChessSquare::Empty
+        && testing_board[0][5] == ChessSquare::Empty
+        && testing_board[0][4] == ChessSquare::WhiteKing;
+      if !valid_position {
+        return false;
+      }
+      for i in 0..3 {
+        testing_board[0][4] = ChessSquare::Empty;
+        testing_board[0][4 + i] = ChessSquare::WhiteKing;
+        let check = get_check(&testing_board, player);
+        let is_player_in_check = check.is_some() && check.as_ref().unwrap() == player;
+        testing_board[0][4 + i] = ChessSquare::Empty;
+        testing_board[0][4] = ChessSquare::WhiteKing;
+        if is_player_in_check {
+          return false;
+        }
+      }
+      return true;
+    },
+    &Castling::BlackLong => {
+      let valid_position = testing_board[7][0] == ChessSquare::BlackRook
+        && testing_board[7][1] == ChessSquare::Empty
+        && testing_board[7][2] == ChessSquare::Empty
+        && testing_board[7][3] == ChessSquare::Empty
+        && testing_board[7][4] == ChessSquare::BlackKing;
+      if !valid_position {
+        return false;
+      }
+      for i in 0..3 {
+        testing_board[7][4] = ChessSquare::Empty;
+        testing_board[7][4 - i] = ChessSquare::BlackKing;
+        let check = get_check(&testing_board, player);
+        let is_player_in_check = check.is_some() && check.as_ref().unwrap() == player;
+        testing_board[7][4 - i] = ChessSquare::Empty;
+        testing_board[7][4] = ChessSquare::BlackKing;
+        if is_player_in_check {
+          return false;
+        }
+      }
+      return true;
+    },
+    &Castling::BlackShort => {
+      let valid_position = testing_board[7][7] == ChessSquare::BlackRook
+        && testing_board[7][6] == ChessSquare::Empty
+        && testing_board[7][5] == ChessSquare::Empty
+        && testing_board[7][4] == ChessSquare::BlackKing;
+      if !valid_position {
+        return false;
+      }
+      for i in 0..3 {
+        testing_board[7][4] = ChessSquare::Empty;
+        testing_board[7][4 + i] = ChessSquare::BlackKing;
+        let check = get_check(&testing_board, player);
+        let is_player_in_check = check.is_some() && check.as_ref().unwrap() == player;
+        testing_board[7][4 + i] = ChessSquare::Empty;
+        testing_board[7][4] = ChessSquare::BlackKing;
+        if is_player_in_check {
+          return false;
+        }
+      }
+      return true;
+    },
+  }
 }
