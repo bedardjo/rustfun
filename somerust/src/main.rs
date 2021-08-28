@@ -278,25 +278,29 @@ fn main() {
         }
         
         if active_computer && chess_board.current_player == ChessColor::Black && time::Instant::now() > computer_can_move_instant {
-          let mut multi_thought_node = MultiThoughtNode{
-            game_state: chess_board.clone(),
-            children: Vec::new(),
-            calculated_score: 0.0,
-            thought_threads: 6
-          };
-          let mut thought_node = multi_thought_node.alphabeta(4);
-          // let mut thought_node = ThoughtNode{
+          let start = time::Instant::now();
+          // let mut multi_thought_node = MultiThoughtNode{
           //   game_state: chess_board.clone(),
           //   children: Vec::new(),
           //   calculated_score: 0.0,
+          //   thought_threads: 30
           // };
-          // thought_node.alphabeta(4);
+          // let mut thought_node = multi_thought_node.alphabeta(4);
+          let mut thought_node = ThoughtNode{
+            game_state: chess_board.clone(),
+            children: Vec::new(),
+            calculated_score: 0.0,
+          };
+          thought_node.alphabeta(5);
           if thought_node.children.is_empty() {
             active_computer = false;
           } else {
             let best_ai_move = thought_node.get_best_move();
+            let stop = time::Instant::now();
             chess_board = chess_board.do_move(&best_ai_move);
             print!("{}\n", best_ai_move.to_string());
+            let thought_duration = stop - start;
+            print!("thought for {}\n", thought_duration.as_millis());
             game_moves.push(best_ai_move.clone());
           }
         }
