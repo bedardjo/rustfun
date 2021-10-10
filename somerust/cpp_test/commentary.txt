@@ -1,0 +1,68 @@
+g++ -c fib.s -o fib.o; g++ fib.o main.cpp -o poo; ./poo; rm fib.o; rm poo
+
+
+int fib(int n) {
+  if (n <= 1) {
+    return 1;
+  }
+  return fib(n - 2) + fib(n - 1);
+}
+
+int main(int argc, char** argv) { return fib(20); }
+
+
+	.section	__TEXT,__text,regular,pure_instructions
+	.build_version macos, 11, 0	sdk_version 11, 1
+	.globl	__Z3fibi                ## -- Begin function _Z3fibi
+	.p2align	4, 0x90
+__Z3fibi:                               ## @_Z3fibi
+	.cfi_startproc
+## %bb.0:
+	pushq	%rbp                            ## push quad rbp = frame pointer
+	.cfi_def_cfa_offset 16                ## 
+	.cfi_offset %rbp, -16                 ## 
+	movq	%rsp, %rbp                      ## rsp is stack pointer rbp is base pointer
+	.cfi_def_cfa_register %rbp
+	pushq	%r14                            ## r14 is a register
+	pushq	%rbx                            ## rbx is a register
+	.cfi_offset %rbx, -32
+	.cfi_offset %r14, -24
+	movl	$1, %r14d
+	cmpl	$2, %edi                        ## edi is passed in val, compare to 2 (lte)
+	jl	LBB0_3                            ## LBB0_3 is end cond
+## %bb.1:
+	movl	%edi, %ebx                      ## edi is 'n'
+	incl	%ebx                            ## inc 
+	movl	$1, %r14d
+	.p2align	4, 0x90
+LBB0_2:                                 ## =>This Inner Loop Header: Depth=1
+	leal	-3(%rbx), %edi                  ## probably performing some odd computation like n - 2, put it in edi, which is 'n' in the func
+	callq	__Z3fibi                        ## recursive call!
+	addl	%eax, %r14d
+	decl	%ebx
+	cmpl	$2, %ebx
+	jg	LBB0_2
+LBB0_3:
+	movl	%r14d, %eax
+	popq	%rbx
+	popq	%r14
+	popq	%rbp
+	retq
+	.cfi_endproc
+                                        ## -- End function
+	.globl	_main                   ## -- Begin function main
+	.p2align	4, 0x90
+_main:                                  ## @main
+	.cfi_startproc
+## %bb.0:
+	pushq	%rbp                            ## push backpointer
+	.cfi_def_cfa_offset 16  
+	.cfi_offset %rbp, -16
+	movq	%rsp, %rbp                      ## move stack pointer into back pointer
+	.cfi_def_cfa_register %rbp            ## 
+	movl	$20, %edi                       ## move 20 into edi 
+	popq	%rbp                            ## pop back into rbp
+	jmp	__Z3fibi                ## TAILCALL
+	.cfi_endproc
+                                        ## -- End function
+.subsections_via_symbols
